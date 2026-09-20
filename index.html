@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f6f8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="家里有药">
+  <meta name="description" content="你的本地家庭药箱。记录药品、有效期、位置和说明书，离线也能找到。">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'none'; font-src 'self'; worker-src 'self'; manifest-src 'self'; frame-src 'none'; media-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>家里有药</title>
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div id="app"><main class="boot"><h1>家里有药</h1><p>正在打开本地药箱…</p></main></div>
+  <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"></dialog>
+  <dialog id="photo-dialog" class="photo-dialog" aria-label="查看照片"></dialog>
+  <noscript>家里有药需要启用 JavaScript 才能访问本地药箱。</noscript>
+</body>
+</html>
