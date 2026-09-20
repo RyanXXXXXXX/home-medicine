@@ -1,7 +1,7 @@
-const VERSION = 'home-medicine-v1.0.2';
+const VERSION = 'home-medicine-v1.1.0';
 const BASE = new URL('./', self.location.href);
 const CACHE = `${VERSION}:${BASE.pathname}`;
-const FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './db.js', './backup.js', './photos.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './db.js', './backup.js', './photos.js', './ocr.js', './ocr-parser.js', './ocr-ui.js', './ocr-worker.js', './vendor/ocr/ASSETS.json', './vendor/ocr/chi_sim.traineddata.gz', './vendor/ocr/eng.traineddata.gz', './vendor/ocr/LICENSE-core', './vendor/ocr/LICENSE-tesseract-js', './vendor/ocr/tesseract-core-lstm.wasm.js', './vendor/ocr/tesseract-core-simd-lstm.wasm.js', './vendor/ocr/tesseract-core-simd.wasm.js', './vendor/ocr/tesseract-core.wasm.js', './vendor/ocr/tesseract.min.js', './vendor/ocr/worker.min.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES.map(path => new URL(path, BASE).href))));
   // Do not force an update while a user is editing; activate after all old windows close.

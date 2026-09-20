@@ -4,3 +4,9 @@
 @media(max-width:360px){.shell{padding-left:14px;padding-right:14px}.search{padding-left:10px;padding-right:10px;gap:6px}.search input{font-size:15px}.medicine-card{padding:16px}.quantity-tag{font-size:13px}}
 @media(prefers-color-scheme:dark){:root{--bg:#141a21;--surface:#202830;--ink:#edf1f5;--muted:#a3afb9;--line:#303c46;--accent:#75d3c4;--accent-soft:#223e3c;--red:#ff9698;--red-soft:#432c31;--amber:#efc486;--amber-soft:#3a3429}.primary,.floating-add{background:#1d8479;color:white}.destructive{background:#b13740;color:white}.photo-dialog{background:#10151b}.toast{background:#e9eef2;color:#17212a}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}dialog[open]{animation:appear .15s ease-out}@keyframes appear{from{transform:translateY(10px);opacity:.6}to{transform:none;opacity:1}}}
+/* OCR confirmation stays separate from the unsaved medicine draft. */
+.ocr-dialog{width:min(94vw,620px);max-height:90dvh;overflow:auto;border:0;border-radius:22px;padding:24px;color:var(--text);background:var(--surface,#fff)}
+.ocr-dialog::backdrop{background:#0008}
+.ocr-dialog .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.ocr-field{margin:20px 0}.ocr-field>input,.ocr-field>textarea{width:100%;box-sizing:border-box;padding:12px;font:inherit;border:1px solid #b7c6c4;border-radius:10px;background:transparent;color:inherit}
+.ocr-original{display:block;max-width:100%;height:auto;margin:12px 0}.ocr-raw{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:14px}

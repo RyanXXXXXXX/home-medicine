@@ -1,4 +1,5 @@
-export const TEXT_FIELDS = ['name', 'specification', 'quantityUnit', 'location', 'purpose', 'ingredients', 'indications', 'dosage', 'contraindications', 'precautions', 'instructionText'];
+export const OCR_FIELDS = ['genericName', 'packaging', 'manufacturer', 'approvalNumber', 'productionDate'];
+export const TEXT_FIELDS = ['name', 'specification', 'quantityUnit', 'location', 'purpose', 'ingredients', 'indications', 'dosage', 'contraindications', 'precautions', 'instructionText', ...OCR_FIELDS];
 export const DEFAULT_SETTINGS = Object.freeze({ reminders: true, reminderDays: [90, 30, 7, 0], lastBackupAt: null, changesSinceBackup: 0 });
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -41,6 +42,8 @@ export function newMedicine(source = {}) {
 }
 export function validateMedicine(record) {
   if (!record || typeof record !== 'object' || typeof record.id !== 'string' || !/^[\w-]{8,80}$/.test(record.id)) throw new Error('药品编号无效。');
+  // Additive optional fields: pre-OCR records and version-1 backups remain valid.
+  for (const field of OCR_FIELDS) if (record[field] === undefined) record[field] = '';
   for (const field of TEXT_FIELDS) if (typeof record[field] !== 'string' || record[field].length > 100000) throw new Error(`药品字段无效：${field}`);
   if (!record.name.trim() || record.name.length > 160) throw new Error('请填写药名（最多160字）。');
   if (!Number.isInteger(record.quantity) || record.quantity < 0 || record.quantity > 99999) throw new Error('数量请填写 0 至 99999 的整数。');

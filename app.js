@@ -2,6 +2,7 @@ import { TEXT_FIELDS, newMedicine, expiry, formatDate, expirationDate, searchMed
 import { snapshot, getPhoto, saveMedicine, deleteMedicine, saveSettings, markBackup, restoreSnapshot } from './db.js';
 import { compressPhoto } from './photos.js';
 import { createBackup, parseBackup } from './backup.js';
+import { scanPicker, scanAndReview } from './ocr-ui.js';
 
 const app = document.querySelector('#app');
 const state = { medicines: [], settings: {}, revision: 0, route: 'home', query: '', id: null, draft: null, pendingPhotos: new Map(), objectURLs: [], busy: false, offlineReady: false, backup: null };
@@ -87,6 +88,8 @@ function editor() {
   return `<main class="shell">${nav(title, state.editorBack.route, '<button class="text-button" type="submit" form="medicine-form">保存</button>')}
   <form id="medicine-form" novalidate>
   <div id="form-error" class="error-banner" role="alert" hidden></div>
+  <section class="group"><button class="secondary full" type="button" data-action="scan-open" data-kind="box">${icon('photo')} 扫描药盒</button><p class="small muted">本机中文识别，拍照或选图后逐项确认；不上传照片。</p>
+  ${['box', 'instruction'].map(kind => `<input class="visually-hidden" type="file" id="ocr-file-${kind}" data-ocr-kind="${kind}" accept="image/*" ${kind === 'instruction' ? 'multiple' : ''} tabindex="-1" aria-label="扫描${kind === 'box' ? '药盒' : '说明书'}相册"><input class="visually-hidden" type="file" id="ocr-camera-${kind}" data-ocr-kind="${kind}" accept="image/*" capture="environment" tabindex="-1" aria-label="扫描${kind === 'box' ? '药盒' : '说明书'}拍照">`).join('')}</section>
   ${state.restock ? `<p class="notice">已沿用「${esc(draft.name)}」的说明书和照片。填写新数量、有效期即可；原历史记录会保留。</p>` : ''}
   <section class="group">${field('药品名称', 'name', draft.name, { required: true })}
   <label class="switch-row"><span>药盒仅标注月份</span><input type="checkbox" name="expirationMonthOnly" ${draft.expirationMonthOnly ? 'checked' : ''}></label>
@@ -98,12 +101,14 @@ function editor() {
   <section class="group">${field('适应症 / 用途', 'indications', draft.indications, { multiline: true, hint: '请按说明书填写。症状搜索以这些文字为依据，不确定时留空。' })}</section>
   ${editorPhotos('box', '药盒照片', draft.boxPhotoId ? [draft.boxPhotoId] : [])}
   ${editorPhotos('instruction', '说明书照片', draft.instructionPhotoIds)}
-  <section class="group"><details><summary>更多说明书信息</summary>${[['主要成分', 'ingredients'], ['用法用量', 'dosage'], ['禁忌', 'contraindications'], ['注意事项', 'precautions'], ['说明书文字（可粘贴）', 'instructionText']].map(([label, name]) => field(label, name, draft[name], { multiline: true })).join('')}<p class="small muted">文字由你填写和确认，当前版本不会自动识别或改写内容。</p></details></section>
+  <section class="group"><details><summary>更多药盒信息</summary>${[['通用名','genericName'],['包装数量','packaging'],['生产厂家','manufacturer'],['批准文号','approvalNumber'],['生产日期','productionDate']].map(([label,name]) => field(label,name,draft[name])).join('')}</details></section>
+  <section class="group"><details><summary>更多说明书信息</summary>${[['主要成分', 'ingredients'], ['用法用量', 'dosage'], ['禁忌', 'contraindications'], ['注意事项', 'precautions'], ['说明书文字（可粘贴）', 'instructionText']].map(([label, name]) => field(label, name, draft[name], { multiline: true })).join('')}<p class="small muted">识别文字必须对照说明书确认，可随时手动修改。</p></details></section>
   <button class="primary full" type="submit">保存药品</button></form></main>`;
 }
 function editorPhotos(kind, title, ids) {
   return `<section class="group"><h2>${title}${kind === 'instruction' ? ' <span class="muted small">可多张</span>' : ''}</h2>
   <div class="photo-buttons"><button type="button" data-action="choose-photo" data-kind="${kind}">${icon('photo')} 选择照片</button><button type="button" data-action="take-photo" data-kind="${kind}">${icon('plus')} 拍摄照片</button></div>
+  ${kind === 'instruction' ? `<div class="photo-buttons"><button type="button" data-action="scan-open" data-kind="instruction">扫描说明书（可多页）</button>${ids.length ? '<button type="button" data-action="scan-existing">识别已有说明书照片</button>' : ''}</div>` : ''}
   <input class="visually-hidden" type="file" id="file-${kind}" data-photo-kind="${kind}" accept="image/*" ${kind === 'instruction' ? 'multiple' : ''} tabindex="-1" aria-label="选择${title}">
   <input class="visually-hidden" type="file" id="camera-${kind}" data-photo-kind="${kind}" accept="image/*" capture="environment" tabindex="-1" aria-label="拍摄${title}">
   <div class="photo-grid">${ids.map((id, index) => `<div class="photo-item"><button type="button" data-action="view-photo" data-photo-id="${esc(id)}"><img data-photo="${esc(id)}" alt="${title} ${index + 1}"></button><button type="button" class="remove-photo" data-action="remove-photo" data-photo-id="${esc(id)}">移除</button></div>`).join('')}</div>
@@ -120,7 +125,7 @@ function detail() {
   ${record.expirationMonthOnly ? '<p class="small muted">按标注月份的最后一天计算。</p>' : ''}
   <p class="location">${icon('pin')}${esc(record.location || '未填写位置')}</p></div>
   <hr class="divider"><div class="quantity-line"><span>剩余数量</span><div class="counter">${!record.isArchived ? '<button data-action="quantity-minus" aria-label="减少数量">−</button>' : ''}<strong>${record.quantity}${esc(record.quantityUnit)}</strong>${!record.isArchived ? '<button data-action="quantity-plus" aria-label="增加数量">＋</button>' : ''}</div></div></section>
-  ${[['用途 / 备注', 'purpose'], ['主要成分', 'ingredients'], ['适应症 / 用途', 'indications'], ['用法用量', 'dosage'], ['禁忌', 'contraindications'], ['注意事项', 'precautions']].filter(([, name]) => record[name].trim()).map(([label, name]) => `<section class="group"><h2>${label}</h2><p class="prose">${esc(record[name])}</p></section>`).join('')}
+  ${[['通用名','genericName'],['包装数量','packaging'],['生产厂家','manufacturer'],['批准文号','approvalNumber'],['生产日期','productionDate'],['用途 / 备注', 'purpose'], ['主要成分', 'ingredients'], ['适应症 / 用途', 'indications'], ['用法用量', 'dosage'], ['禁忌', 'contraindications'], ['注意事项', 'precautions']].filter(([, name]) => record[name]?.trim()).map(([label, name]) => `<section class="group"><h2>${label}</h2><p class="prose">${esc(record[name])}</p></section>`).join('')}
   ${record.instructionPhotoIds.length ? `<section class="group"><h2>说明书原图 <span class="small muted">${record.instructionPhotoIds.length}张</span></h2><div class="photo-grid">${record.instructionPhotoIds.map((id, i) => `<div class="photo-item"><button data-action="view-photo" data-photo-id="${esc(id)}"><img data-photo="${esc(id)}" alt="说明书第${i + 1}张"></button></div>`).join('')}</div><p class="small muted">点击查看；双指缩放或点按放大。</p></section>` : ''}
   ${record.instructionText ? `<section class="group"><h2>说明书文字</h2><p class="prose">${esc(record.instructionText)}</p></section>` : ''}
   ${!record.indications && !record.purpose ? '<p class="notice">补充说明书适应症 / 用途后，就能通过症状查找这盒药。</p>' : ''}
@@ -142,7 +147,7 @@ function settings() {
   <p class="backup-info">药箱数据仅保存在本机，建议定期备份。${state.settings.lastBackupAt ? `<br>上次导出：${new Date(state.settings.lastBackupAt).toLocaleString('zh-CN')}<br>导出后请确认文件已保存。` : '<br>还没有导出过备份。'}<br>备份不加密，请保存到可信位置。清除网站数据、卸载或更换手机前，请先备份。</p></section>
   <section class="group">${menuRow('navigate', '数据与隐私', '本机保存，无账号，无数据上传', 'shield', 'privacy')}<div class="status-line">${icon(state.offlineReady ? 'check' : 'clock')}<span id="offline-status">${offlineLabel()}</span></div><p id="storage-status" class="small muted"></p></section>
   <section class="group"><h2>添加到 iPhone 主屏幕</h2><p class="small muted">在 Safari 打开此网址，点“分享” → “添加到主屏幕”。然后从主屏幕打开一次，看到“离线资源已就绪”后即可离线使用。</p><p class="small muted">建议先添加到主屏幕，再开始录入。浏览器与主屏幕 App、不同网址之间的数据可能不互通，可通过备份迁移。</p></section>
-  <p class="footer-note">家里有药 · 1.0.2<br>只记家里的药，不作诊断。</p></main>`;
+  <p class="footer-note">家里有药 · 1.1.0<br>只记家里的药，不作诊断。</p></main>`;
 }
 function privacy() { return `<main class="shell">${nav('数据与隐私', 'settings')}<section class="group"><h2>数据留在你的设备</h2><p class="prose">你的药品、说明书和照片默认保存在本设备，不会上传到服务器。
 
@@ -246,6 +251,27 @@ async function addPhotoFiles(files, kind) {
     render(); toast(`已处理 ${added} 张照片，保存药品后生效`);
   } catch (error) { render(); showError(new Error(`${error.message}${added ? ` 已处理的 ${added} 张照片仍保留。` : ''}`)); }
   finally { setBusy(false); }
+}
+async function scanFiles(files, kind, existing = false) {
+  if (!state.draft || !files.length || state.busy) return;
+  if (files.length > 8) throw new Error('每次最多识别 8 张照片，请分批选择。');
+  setBusy(true);
+  try {
+    const result = await scanAndReview(files, kind, { ...state.draft, expirationInput: state.expirationInput }, { existing });
+    if (!result) return;
+    const { expirationInput, ...fields } = result.fields;
+    // Prepare every photo first so cancellation/failure cannot partly overwrite the draft.
+    const photos = [];
+    if (result.keepPhotos) for (const file of files) photos.push({ ...await compressPhoto(file, kind), medicineId: state.draft.id });
+    Object.assign(state.draft, fields);
+    if (expirationInput) { state.expirationInput = expirationInput; state.draft.expirationMonthOnly = expirationInput.length === 7; }
+    for (const photo of photos) {
+      if (kind === 'box') { state.pendingPhotos.delete(state.draft.boxPhotoId); state.draft.boxPhotoId = photo.id; }
+      else state.draft.instructionPhotoIds.push(photo.id);
+      state.pendingPhotos.set(photo.id, photo);
+    }
+    render(); toast('已填入草稿，请核对后保存药品');
+  } finally { setBusy(false); }
 }
 async function updateRecord(record, patch) {
   setBusy(true);
@@ -355,7 +381,8 @@ app.addEventListener('input', event => {
 app.addEventListener('change', async event => {
   const target = event.target;
   try {
-    if (target.dataset.photoKind) await addPhotoFiles([...target.files], target.dataset.photoKind);
+    if (target.dataset.ocrKind) { const files = [...target.files]; target.value = ''; await scanFiles(files, target.dataset.ocrKind); }
+    else if (target.dataset.photoKind) await addPhotoFiles([...target.files], target.dataset.photoKind);
     else if (target.id === 'backup-file') await importBackup(target.files[0]);
     else if (target.name === 'expirationMonthOnly' && state.draft) {
       state.draft.expirationMonthOnly = target.checked;
@@ -382,6 +409,12 @@ app.addEventListener('click', async event => {
   const record = state.medicines.find(m => m.id === state.id);
   try {
     switch (action) {
+      case 'scan-open': scanPicker(kind); break;
+      case 'scan-existing': {
+        const files = [];
+        for (const photoID of state.draft.instructionPhotoIds) { const photo = state.pendingPhotos.get(photoID) || await getPhoto(photoID); if (photo) files.push(photo.blob); }
+        await scanFiles(files, 'instruction', true); break;
+      }
       case 'clear-search': state.query = ''; render(); document.querySelector('#search').focus(); break;
       case 'navigate': await navigate(route, route === state.editorBack?.route ? state.editorBack?.id : null); break;
       case 'detail': await navigate('detail', id); break;
@@ -409,6 +442,7 @@ app.addEventListener('click', async event => {
 });
 history.replaceState({ route: 'home', id: null }, '', '#home');
 window.addEventListener('popstate', async event => {
+  if (state.busy || document.querySelector('#ocr-dialog[open]')) { history.pushState({ route: state.route, id: state.id }, '', `#${state.route}`); return; }
   const target = event.state || { route: 'home', id: null };
   if (state.route === 'editor' && state.draft) {
     if (!await confirmAction('放弃此次修改？', '返回后，未保存的修改会被丢弃。', '放弃修改', true)) { history.pushState({ route: state.route, id: state.id }, '', '#editor'); return; }
