@@ -1,4 +1,4 @@
-import { BOX_FIELDS, LEAFLET_FIELDS, parseBox, parseLeaflet, readPrintedDate } from './ocr-parser.js';
+import { BOX_FIELDS, LEAFLET_FIELDS, parseBox, parseLeaflet, readPrintedDate, reviewCandidates } from './ocr-parser.js';
 import { recognizePhotos } from './ocr.js';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function dialog() {
@@ -26,7 +26,7 @@ export async function scanAndReview(files, kind, current, { existing = false } =
   node.showModal();
   let pages;
   try {
-    pages = await recognizePhotos(files, { signal: controller.signal, progress: text => { const label = node.querySelector('#ocr-progress'); if (label) label.textContent = text; } });
+    pages = await recognizePhotos(files, { kind, signal: controller.signal, progress: text => { const label = node.querySelector('#ocr-progress'); if (label) label.textContent = text; } });
   } catch (error) {
     if (controller.signal.aborted) return null;
     pages = [{ lines: [], text: '', error: error?.message || '识别失败，请重试或手动填写。' }];
@@ -35,11 +35,13 @@ export async function scanAndReview(files, kind, current, { existing = false } =
   const fields = kind === 'box' ? parseBox(pages.flatMap(p => p.lines)) : parseLeaflet(pages);
   const definitions = kind === 'box' ? BOX_FIELDS : LEAFLET_FIELDS;
   const success = Object.values(fields).some(Boolean);
+  const rawCount = pages.reduce((count, page) => count + page.text.trim().length, 0);
+  const candidates = kind === 'box' ? reviewCandidates(pages.map(p => p.text).join('\n')) : {};
   if (success) { try { navigator.vibrate?.(35); } catch { /* Optional; iPhone Safari may not expose vibration. */ } }
-  const errors = pages.map((p, i) => p.error ? `第 ${i + 1} 张：${p.error}` : '').filter(Boolean);
+  const errors = pages.map((p, i) => p.error || p.warning ? `第 ${i + 1} 张：${p.error || p.warning}` : '').filter(Boolean);
   if (pages.length < files.length) errors.push('剩余照片尚未识别，可分批重试。');
   const urls = files.map(file => URL.createObjectURL(file));
-  node.innerHTML = `<h2>确认识别结果</h2><p role="status">${success ? '识别完成，请逐项对照原图。' : '未取得可靠结果，请重拍或手动填写。'}</p><p class="small muted">低置信度字段留空；不会推算有效期。只填入勾选字段，最后仍需点击“保存药品”。</p>
+  node.innerHTML = `<h2>确认识别结果</h2><p role="status">${success ? '识别完成，请逐项对照原图。' : rawCount ? '已识别出原始文字，但字段置信度不足或格式未匹配；请查看原文并手动确认。' : '未取得可靠结果；请查看下方具体原因，或手动填写。'}</p><p class="small muted">OCR 1.1.1 · 原始文字 ${rawCount} 字${rawCount ? ' · 引擎已执行' : ''}。低置信度字段留空；不会推算有效期。只填入勾选字段，最后仍需点击“保存药品”。</p>
     ${errors.map(text => `<p class="notice error">${esc(text)}</p>`).join('')}
     <details><summary>查看本次原图（${files.length} 张）</summary>${urls.map((url,i) => `<img class="ocr-original" src="${url}" alt="扫描原图 ${i + 1}">`).join('')}</details>
     <form id="ocr-review-form" novalidate>${definitions.map(([label, name]) => {
@@ -47,10 +49,11 @@ export async function scanAndReview(files, kind, current, { existing = false } =
       return `<section class="ocr-field"><label class="switch-row"><span>${label}</span><input type="checkbox" name="apply-${name}" aria-label="填入${label}" ${!previous && value ? 'checked' : ''}></label>
       ${kind === 'instruction' ? `<textarea name="${name}" rows="3" aria-label="${label}" maxlength="100000">${esc(value)}</textarea>` : `<input name="${name}" aria-label="${label}" value="${esc(value)}" maxlength="${name === 'name' ? 160 : 1000}">`}
       ${previous ? `<p class="small muted">原填写：${esc(previous.slice(0, 150))}。勾选后替换。</p>` : ''}
+      ${!value && candidates[name]?.length ? `<p class="small muted">未自动填入的候选，核对原图后点选：</p>${candidates[name].map(candidate => `<button type="button" class="secondary" data-candidate-field="${name}" data-candidate-value="${esc(candidate)}">${esc(candidate)}</button>`).join('')}` : ''}
       ${name === 'expirationInput' || name === 'productionDate' ? '<p class="small muted">YYYY-MM-DD 或 YYYY-MM；“有效期24个月”不能作为失效日期。</p>' : ''}</section>`;
     }).join('')}
     ${!existing ? '<label class="switch-row"><span>保留本次原图到药品照片</span><input type="checkbox" name="keepPhotos" checked></label>' : ''}
-    <details><summary>查看 OCR 原始文字（可能有误）</summary><pre class="ocr-raw">${esc(pages.map((p,i)=>`第 ${i+1} 张\n${p.text}`).join('\n\n'))}</pre></details>
+    <details ${!success && rawCount ? 'open' : ''}><summary>查看 OCR 原始文字（可能有误）</summary><pre class="ocr-raw">${esc(pages.map((p,i)=>`第 ${i+1} 张\n${p.text || '（无原始文字）'}`).join('\n\n'))}</pre></details>
     <p id="ocr-error" role="alert" class="error-banner" hidden></p>
     <div class="actions"><button type="button" id="ocr-discard" class="secondary">取消，保留原填写</button><button class="primary" type="submit">确认并填入</button></div></form>`;
   return new Promise(resolve => {
@@ -58,6 +61,13 @@ export async function scanAndReview(files, kind, current, { existing = false } =
     node.oncancel = event => { event.preventDefault(); done(null); };
     node.querySelector('#ocr-discard').onclick = () => done(null);
     const form = node.querySelector('form');
+    form.onclick = event => {
+      const button = event.target.closest('[data-candidate-field]');
+      if (!button) return;
+      const name = button.dataset.candidateField;
+      form.elements[name].value = button.dataset.candidateValue;
+      form.elements[`apply-${name}`].checked = true;
+    };
     form.oninput = event => { const checkbox = form.elements[`apply-${event.target.name}`]; if (checkbox) checkbox.checked = true; };
     form.onsubmit = event => {
       event.preventDefault(); const values = new FormData(form), result = {};

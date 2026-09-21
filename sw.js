@@ -1,10 +1,11 @@
-const VERSION = 'home-medicine-v1.1.0';
+const VERSION = 'home-medicine-v1.1.1';
 const BASE = new URL('./', self.location.href);
 const CACHE = `${VERSION}:${BASE.pathname}`;
 const FILES = ['./', './index.html', './styles.css', './app.js', './core.js', './db.js', './backup.js', './photos.js', './ocr.js', './ocr-parser.js', './ocr-ui.js', './ocr-worker.js', './vendor/ocr/ASSETS.json', './vendor/ocr/chi_sim.traineddata.gz', './vendor/ocr/eng.traineddata.gz', './vendor/ocr/LICENSE-core', './vendor/ocr/LICENSE-tesseract-js', './vendor/ocr/tesseract-core-lstm.wasm.js', './vendor/ocr/tesseract-core-simd-lstm.wasm.js', './vendor/ocr/tesseract-core-simd.wasm.js', './vendor/ocr/tesseract-core.wasm.js', './vendor/ocr/tesseract.min.js', './vendor/ocr/worker.min.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES.map(path => new URL(path, BASE).href))));
-  // Do not force an update while a user is editing; activate after all old windows close.
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES.map(path => new Request(new URL(path, BASE).href, { cache: 'reload' })))).then(() => self.skipWaiting()));
+  // Complete the cache before activation. Never reload an open editor; the next
+  // user-initiated reload receives this version, even with other PWA windows open.
 });
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {

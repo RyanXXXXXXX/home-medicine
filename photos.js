@@ -1,4 +1,4 @@
-export async function compressPhoto(file, kind) {
+export async function compressPhoto(file, kind, maxDimension) {
   if (!file || file.size > 40 * 1024 * 1024) throw new Error('单张照片请小于 40 MB。');
   const url = URL.createObjectURL(file);
   try {
@@ -6,7 +6,7 @@ export async function compressPhoto(file, kind) {
     image.src = url;
     try { await image.decode(); } catch { throw new Error('此照片无法读取。请使用 JPEG、PNG 或设备相机照片；HEIC 不兼容时请先转为 JPEG。'); }
     if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 100_000_000) throw new Error('照片尺寸过大或无法读取。');
-    const limit = kind === 'instruction' ? 3000 : 1600;
+    const limit = maxDimension || (kind === 'instruction' ? 3000 : 1600);
     const ratio = Math.min(1, limit / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));

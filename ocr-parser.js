@@ -28,6 +28,16 @@ export function readPrintedDate(text) {
   const result = `${year}-${month}-${day.padStart(2, '0')}`;
   return validDate(result) ? result : '';
 }
+// Review choices only: these never become confidence-qualified auto-fill fields.
+export function reviewCandidates(text) {
+  const names = new Set(), specs = new Set();
+  for (const raw of String(text || '').split('\n')) {
+    const line = clean(raw);
+    if (/^[\u3400-\u9fff]{2,28}(?:片|胶囊|颗粒|口服液|注射液|乳膏|软膏|丸|散|合剂|糖浆)$/.test(line)) names.add(line);
+    for (const match of line.matchAll(/(?<![\w.])(\d+(?:\.\d+)?\s*(?:mg|ml|g|毫克|毫升|克))(?![a-z])/gi)) specs.add(match[1]);
+  }
+  return { name: [...names].slice(0,3), specification: [...specs].slice(0,3) };
+}
 const labels = [
   ['genericName', /^(?:通用名称|通用名)\s*[：:]?\s*(.*)$/],
   ['name', /^(?:药品名称|药品名|商品名称|商品名|中文名称)\s*[：:]?\s*(.*)$/],
@@ -56,6 +66,7 @@ export function parseBox(lines) {
       offer(key, value);
     }
     if (reliable(line, 88)) {
+      if (/^\d+(?:\.\d+)?\s*(?:mg|g|ml|毫克|克|毫升)$/i.test(line.text)) offer('specification', line.text);
       offer('approvalNumber', /^(国药准字[HJZSBF]\d{8})$/i.exec(line.text.replace(/\s/g, ''))?.[1]);
       if (!candidates.has('specification') && /^\d+(?:\.\d+)?\s*(?:mg|g|ml|毫克|克|毫升)\s*[×xX*]\s*\d+\s*(?:片|粒|袋|支|瓶)(?:\s*[×xX*]\s*\d+\s*(?:板|瓶|盒|袋))?$/i.test(line.text)) offer('specification', line.text);
     }

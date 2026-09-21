@@ -147,7 +147,7 @@ function settings() {
   <p class="backup-info">药箱数据仅保存在本机，建议定期备份。${state.settings.lastBackupAt ? `<br>上次导出：${new Date(state.settings.lastBackupAt).toLocaleString('zh-CN')}<br>导出后请确认文件已保存。` : '<br>还没有导出过备份。'}<br>备份不加密，请保存到可信位置。清除网站数据、卸载或更换手机前，请先备份。</p></section>
   <section class="group">${menuRow('navigate', '数据与隐私', '本机保存，无账号，无数据上传', 'shield', 'privacy')}<div class="status-line">${icon(state.offlineReady ? 'check' : 'clock')}<span id="offline-status">${offlineLabel()}</span></div><p id="storage-status" class="small muted"></p></section>
   <section class="group"><h2>添加到 iPhone 主屏幕</h2><p class="small muted">在 Safari 打开此网址，点“分享” → “添加到主屏幕”。然后从主屏幕打开一次，看到“离线资源已就绪”后即可离线使用。</p><p class="small muted">建议先添加到主屏幕，再开始录入。浏览器与主屏幕 App、不同网址之间的数据可能不互通，可通过备份迁移。</p></section>
-  <p class="footer-note">家里有药 · 1.1.0<br>只记家里的药，不作诊断。</p></main>`;
+  <p class="footer-note">家里有药 · 1.1.1<br>只记家里的药，不作诊断。</p></main>`;
 }
 function privacy() { return `<main class="shell">${nav('数据与隐私', 'settings')}<section class="group"><h2>数据留在你的设备</h2><p class="prose">你的药品、说明书和照片默认保存在本设备，不会上传到服务器。
 
